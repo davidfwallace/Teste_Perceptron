@@ -25,6 +25,11 @@ O modelo foi então validado contra dados inéditos (`digits.test`):
 * 🎯 **Acurácia no Treino:** 99.30%
 * 🏆 **Acurácia no Teste:** 98.58%
 
+### 📊 Visualização da Fronteira de Decisão
+Abaixo está o gráfico gerado pelo modelo, mostrando a reta matemática separando os dados do Dígito 1 (azul) e do Dígito 5 (vermelho):
+
+![Gráfico da Fronteira de Decisão do Perceptron](grafico.png)
+
 ## 💻 Como executar
 1. Clone este repositório.
 2. Certifique-se de ter as bibliotecas instaladas: `pip install numpy matplotlib`
