@@ -37,7 +37,22 @@ def treinar_perceptron(X, y, taxa_aprendizado=0.1, epocas=100):
             
     return pesos, bias
 
-# --- PASSO 3: Desenhar o Gráfico ---
+# --- PASSO Neo-3: Testar e Calcular Acurácia ---
+def calcular_acuracia(X, y, pesos, bias):
+    n_amostras = len(y)
+    acertos = 0
+    
+    for i in range(n_amostras):
+        z = np.dot(X[i], pesos) + bias
+        y_previsto = 1 if z >= 0 else -1
+        
+        if y_previsto == y[i]:
+            acertos += 1
+            
+    acuracia = (acertos / n_amostras) * 100
+    return acuracia
+
+# --- PASSO Neo-4: Desenhar o Gráfico ---
 def plotar_grafico(X, y, pesos, bias):
     # Separa os pontos para o gráfico baseado no rótulo
     X_digito_1 = X[y == 1]
@@ -69,16 +84,27 @@ def plotar_grafico(X, y, pesos, bias):
 # ==========================================
 # EXECUTANDO TUDO
 # ==========================================
-print("Carregando dados...")
+print("Carregando dados de TREINO...")
 X_treino, y_treino = carregar_dados('digits.train')
 
 print("Treinando o Perceptron...")
 pesos_finais, bias_final = treinar_perceptron(X_treino, y_treino, taxa_aprendizado=0.1, epocas=100)
 
-print("\n--- Resultados ---")
+print("\n--- Resultados do Treinamento ---")
 print(f"Peso Intensidade: {pesos_finais[0]:.4f}")
 print(f"Peso Simetria: {pesos_finais[1]:.4f}")
 print(f"Bias: {bias_final:.4f}")
 
-print("Gerando gráfico...")
+# NOVA PARTE: Testando o modelo
+print("\nCarregando dados de TESTE...")
+X_teste, y_teste = carregar_dados('digits.test')
+
+acuracia_treino = calcular_acuracia(X_treino, y_treino, pesos_finais, bias_final)
+acuracia_teste = calcular_acuracia(X_teste, y_teste, pesos_finais, bias_final)
+
+print("\n--- Acurácia (Taxa de Acertos) ---")
+print(f"Acertos nos dados de Treino: {acuracia_treino:.2f}%")
+print(f"Acertos nos dados de Teste (Inéditos): {acuracia_teste:.2f}%")
+
+print("\nGerando gráfico dos dados de TREINO...")
 plotar_grafico(X_treino, y_treino, pesos_finais, bias_final)
