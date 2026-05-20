@@ -1,110 +1,140 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- PASSO 1: Carregar e Filtrar Dados ---
+np.random.seed(42)
+
+# ── PASSO 1: Carregar e Filtrar Dados ─────────────────────────────────────────
 def carregar_dados(caminho_arquivo):
     dados = np.loadtxt(caminho_arquivo)
     filtro = (dados[:, 0] == 1) | (dados[:, 0] == 5)
     dados_filtrados = dados[filtro]
-    
-    X = dados_filtrados[:, 1:3] # Colunas de intensidade e simetria
-    y_original = dados_filtrados[:, 0]
-    y = np.where(y_original == 1, 1, -1) # 1 vira 1, e 5 vira -1
-    
+
+    X = dados_filtrados[:, 1:3]           # intensidade e simetria
+    y = np.where(dados_filtrados[:, 0] == 1, 1, -1)
     return X, y
 
-# --- PASSO 2: O Algoritmo do Perceptron ---
-def treinar_perceptron(X, y, taxa_aprendizado=0.1, epocas=100):
-    n_amostras, n_caracteristicas = X.shape
-    pesos = np.zeros(n_caracteristicas)
-    bias = 0.0
+# ── PASSO 2: Pocket PLA (Atualizado para 2 históricos) ────────────────────────
+def treinar_pocket(X, y, taxa_aprendizado=0.01, epocas=1000):
+    n, d = X.shape
+    pesos = np.zeros(d)
+    bias  = 0.0
+
+    def calc_erro(p, b):
+        pred = np.where(np.dot(X, p) + b >= 0, 1, -1)
+        return (pred != y).sum()
+
+    pocket_pesos = pesos.copy()
+    pocket_bias  = bias
+    melhor_erro  = calc_erro(pesos, bias)
     
+    historico_pla = []
+    historico_pocket = []
+
     for epoca in range(epocas):
-        erros_na_epoca = 0
-        for i in range(n_amostras):
-            z = np.dot(X[i], pesos) + bias
-            y_previsto = 1 if z >= 0 else -1
-            
-            if y[i] != y_previsto:
-                erro = y[i] - y_previsto 
-                pesos += taxa_aprendizado * erro * X[i]
-                bias += taxa_aprendizado * erro
-                erros_na_epoca += 1
-                
-        if erros_na_epoca == 0:
-            print(f"-> Treinamento concluído! Convergiu na época {epoca+1}.")
+        erros_epoca = 0
+        indices = np.random.permutation(n)
+
+        for i in indices:
+            z      = np.dot(X[i], pesos) + bias
+            y_prev = 1 if z >= 0 else -1
+
+            if y[i] != y_prev:
+                pesos += taxa_aprendizado * y[i] * X[i]
+                bias  += taxa_aprendizado * y[i]
+                erros_epoca += 1
+
+        # Fim da época: calcula o erro do PLA (que pode ter piorado)
+        erro_atual_pla = calc_erro(pesos, bias)
+        historico_pla.append(erro_atual_pla / n)
+
+        # Atualiza o Pocket se o PLA atual for ESTRITAMENTE melhor
+        if erro_atual_pla < melhor_erro:
+            melhor_erro  = erro_atual_pla
+            pocket_pesos = pesos.copy()
+            pocket_bias  = bias
+
+        historico_pocket.append(melhor_erro / n)
+
+        if erros_epoca == 0:
+            print(f"  Convergiu na época {epoca + 1}!")
             break
-            
-    return pesos, bias
 
-# --- PASSO Neo-3: Testar e Calcular Acurácia ---
-def calcular_acuracia(X, y, pesos, bias):
-    n_amostras = len(y)
-    acertos = 0
-    
-    for i in range(n_amostras):
-        z = np.dot(X[i], pesos) + bias
-        y_previsto = 1 if z >= 0 else -1
-        
-        if y_previsto == y[i]:
-            acertos += 1
-            
-    acuracia = (acertos / n_amostras) * 100
-    return acuracia
+    return pocket_pesos, pocket_bias, np.array(historico_pla), np.array(historico_pocket)
 
-# --- PASSO Neo-4: Desenhar o Gráfico ---
-def plotar_grafico(X, y, pesos, bias):
-    # Separa os pontos para o gráfico baseado no rótulo
-    X_digito_1 = X[y == 1]
-    X_digito_5 = X[y == -1]
+# ── PASSO 3: Avaliação (Mantido igual) ────────────────────────────────────────
+def avaliar(X, y, pesos, bias, nome=""):
+    pred = np.where(np.dot(X, pesos) + bias >= 0, 1, -1)
+    acc  = (pred == y).mean()
+    erro = 1 - acc
+    print(f"  [{nome}]  Acurácia: {acc * 100:.2f}%  |  Erro: {erro * 100:.2f}%")
+    return erro
 
-    plt.figure(figsize=(10, 6))
-    
-    # Desenha os pontos espalhados (Scatter Plot)
-    plt.scatter(X_digito_1[:, 0], X_digito_1[:, 1], color='blue', label='Dígito 1', alpha=0.5)
-    plt.scatter(X_digito_5[:, 0], X_digito_5[:, 1], color='red', label='Dígito 5', alpha=0.5)
+# ── PASSO 4: Gráficos (Atualizado) ────────────────────────────────────────────
+def plotar_fronteira(X, y, pesos, bias, titulo="Conjunto"):
+    X1 = X[y ==  1]
+    X5 = X[y == -1]
 
-    # A matemática para desenhar a reta: w1*x1 + w2*x2 + b = 0
-    # Isolamos o x2 para achar os pontos da reta no gráfico
-    x1_min, x1_max = X[:, 0].min() - 0.1, X[:, 0].max() + 0.1
-    
-    # Evita divisão por zero caso o peso 2 seja muito pequeno
-    if pesos[1] != 0: 
-        x2_min = (-pesos[0] * x1_min - bias) / pesos[1]
-        x2_max = (-pesos[0] * x1_max - bias) / pesos[1]
-        plt.plot([x1_min, x1_max], [x2_min, x2_max], color='black', linewidth=2, label='Reta do Perceptron')
+    plt.scatter(X1[:, 0], X1[:, 1], color='#2563EB', label='Dígito 1', alpha=0.6, s=25)
+    plt.scatter(X5[:, 0], X5[:, 1], color='#DC2626', label='Dígito 5', alpha=0.6, s=25)
 
-    plt.title('Perceptron: Dígito 1 (Azul) vs Dígito 5 (Vermelho)')
+    if abs(pesos[1]) > 1e-10:
+        x0_min = X[:, 0].min() - 0.05
+        x0_max = X[:, 0].max() + 0.05
+        x1_min = (-pesos[0] * x0_min - bias) / pesos[1]
+        x1_max = (-pesos[0] * x0_max - bias) / pesos[1]
+        plt.plot([x0_min, x0_max], [x1_min, x1_max],
+                 color='black', linewidth=2, label='Fronteira de decisão')
+
+    plt.title(f'Pocket PLA — {titulo}', fontsize=13, fontweight='bold')
     plt.xlabel('Característica 1: Intensidade')
     plt.ylabel('Característica 2: Simetria')
     plt.legend()
-    plt.grid(True)
-    plt.show()
+    plt.grid(True, alpha=0.3)
 
-# ==========================================
-# EXECUTANDO TUDO
-# ==========================================
-print("Carregando dados de TREINO...")
+def plotar_curva(historico_pla, historico_pocket):
+    # Vamos dar "zoom" nas primeiras 100 épocas para a curva não ficar um traço espremido
+    limite = min(len(historico_pla), 100) 
+    
+    plt.plot(historico_pla[:limite], color='gray', alpha=0.4, lw=1.5, label='PLA (Erro flutuante)')
+    plt.step(range(limite), historico_pocket[:limite], color='#2563EB', lw=2.5, where='post', label='Pocket (Melhor salvo)')
+    
+    plt.xlabel('Época (Zoom nas primeiras 100)')
+    plt.ylabel('Taxa de erro (treino)')
+    plt.title('Por que usar o Pocket PLA?', fontsize=13, fontweight='bold')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+
+# ── EXECUÇÃO (Atualizado) ─────────────────────────────────────────────────────
+print("Carregando dados...")
 X_treino, y_treino = carregar_dados('digits.train')
+X_teste,  y_teste  = carregar_dados('digits.test')
+print(f"  Treino: {X_treino.shape[0]} amostras  |  Teste: {X_teste.shape[0]} amostras")
 
-print("Treinando o Perceptron...")
-pesos_finais, bias_final = treinar_perceptron(X_treino, y_treino, taxa_aprendizado=0.1, epocas=100)
+print("\nTreinando Pocket PLA...")
+pesos, bias, hist_pla, hist_pocket = treinar_pocket(X_treino, y_treino, taxa_aprendizado=0.01, epocas=1000)
 
-print("\n--- Resultados do Treinamento ---")
-print(f"Peso Intensidade: {pesos_finais[0]:.4f}")
-print(f"Peso Simetria: {pesos_finais[1]:.4f}")
-print(f"Bias: {bias_final:.4f}")
+print("\n--- Pesos finais ---")
+print(f"  Peso Intensidade : {pesos[0]:.4f}")
+print(f"  Peso Simetria    : {pesos[1]:.4f}")
+print(f"  Bias             : {bias:.4f}")
 
-# NOVA PARTE: Testando o modelo
-print("\nCarregando dados de TESTE...")
-X_teste, y_teste = carregar_dados('digits.test')
+print("\n--- Resultados ---")
+e_in  = avaliar(X_treino, y_treino, pesos, bias, nome="Treino (E_in) ")
+e_out = avaliar(X_teste,  y_teste,  pesos, bias, nome="Teste  (E_out)")
 
-acuracia_treino = calcular_acuracia(X_treino, y_treino, pesos_finais, bias_final)
-acuracia_teste = calcular_acuracia(X_teste, y_teste, pesos_finais, bias_final)
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
-print("\n--- Acurácia (Taxa de Acertos) ---")
-print(f"Acertos nos dados de Treino: {acuracia_treino:.2f}%")
-print(f"Acertos nos dados de Teste (Inéditos): {acuracia_teste:.2f}%")
+plt.sca(axes[0])
+plotar_fronteira(X_treino, y_treino, pesos, bias, titulo=f"Treino  (E_in={e_in*100:.1f}%)")
 
-print("\nGerando gráfico dos dados de TREINO...")
-plotar_grafico(X_treino, y_treino, pesos_finais, bias_final)
+plt.sca(axes[1])
+plotar_fronteira(X_teste, y_teste, pesos, bias, titulo=f"Teste  (E_out={e_out*100:.1f}%)")
+
+plt.sca(axes[2])
+plotar_curva(hist_pla, hist_pocket)
+
+plt.suptitle('Perceptron — Dígitos 1 vs 5', fontsize=14, fontweight='bold', y=1.01)
+plt.tight_layout()
+plt.savefig('resultado_perceptron.png', dpi=150, bbox_inches='tight')
+plt.show()
